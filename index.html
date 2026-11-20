@@ -72,7 +72,7 @@ h3{margin:18px 0 8px;font-size:17px;text-transform:capitalize}h4{margin:14px 0 6
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 /* PEGA AQUÍ los datos de tu proyecto de Firebase (Configuración del proyecto > Tus apps > firebaseConfig) */
-const FB={apiKey:"PEGA_AQUI",authDomain:"PEGA_AQUI",projectId:"PEGA_AQUI",appId:"PEGA_AQUI"};
+const FB={apiKey:"AIzaSyAY2BaN40EDlH6utDY-EodqS8wnKUisJWI",authDomain:"agenda-prototipo-sexoguarro.firebaseapp.com",projectId:"agenda-prototipo-sexoguarro",appId:"1:768654333260:web:4b8f3c7750a18cef8aebe9"};
 const $=s=>document.querySelector(s);
 const iso=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 const parse=s=>{const[a,b,c]=s.split("-").map(Number);return new Date(a,b-1,c)};
@@ -272,8 +272,8 @@ async function connect(){
 }
 function login(auth){
   return new Promise(res=>{
-    $("#app").innerHTML='<h3>Iniciar sesión</h3><input id="lm" type="email" placeholder="Correo" autocomplete="username"><input id="lp" type="password" placeholder="Contraseña" autocomplete="current-password" style="margin-top:8px"><p id="le" class="mut"></p><button class="pri" id="lb">Entrar</button>';
-    $("#lb").onclick=async()=>{try{await auth.signInWithEmailAndPassword($("#lm").value.trim(),$("#lp").value);res()}catch(e){$("#le").textContent="Correo o contraseña incorrectos."}};
+    $("#app").innerHTML='<h3>Iniciar sesión</h3><input id="lm" type="email" placeholder="Correo" autocomplete="username" autocapitalize="none" autocorrect="off"><input id="lp" type="password" placeholder="Contraseña" autocomplete="current-password" style="margin-top:8px"><p id="le" class="mut"></p><button class="pri" id="lb">Entrar</button>';
+    $("#lb").onclick=async()=>{try{await auth.signInWithEmailAndPassword($("#lm").value.trim(),$("#lp").value);res()}catch(e){const c=e.code||"",m={"auth/invalid-credential":"Correo o contraseña incorrectos, o ese usuario no existe en Firebase.","auth/wrong-password":"Contraseña incorrecta.","auth/user-not-found":"Ese correo no existe en Firebase.","auth/invalid-email":"El correo no es válido.","auth/operation-not-allowed":"En Firebase no está activado el inicio de sesión con correo y contraseña.","auth/network-request-failed":"Sin conexión a internet.","auth/too-many-requests":"Demasiados intentos. Espera unos minutos.","auth/invalid-api-key":"La apiKey de Firebase no es correcta.","auth/api-key-not-valid":"La apiKey de Firebase no es correcta."};$("#le").textContent=(m[c]||"Error al entrar.")+" ("+(c||e.message)+")"}};
   });
 }
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js");
