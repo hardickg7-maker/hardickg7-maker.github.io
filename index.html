@@ -61,9 +61,23 @@ h3{margin:18px 0 8px;font-size:17px;text-transform:capitalize}h4{margin:14px 0 6
 .rw{display:flex;gap:6px;margin-bottom:6px}.rw button{flex:none}
 .act{display:flex;gap:8px;justify-content:flex-end}.pri{background:var(--ac);color:var(--on);border-color:var(--ac);font-weight:600}.dng{margin-right:auto;color:#d6453d}
 .rinfo{flex:1;min-width:0}.rinfo small{display:block;color:var(--mut)}
+.noauth .tabs{display:none}
+.tabs{align-items:flex-end}.tabs button{font-weight:500}
+.tabs button span{width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:2px solid transparent;border-radius:14px;font-size:21px}
+.tabs .on{color:var(--tx);font-weight:800}.tabs .on span{border-color:var(--tx)}
+.tabs button[data-t=cal]{flex:1.35}.tabs button[data-t=cal] span{width:52px;height:52px;font-size:28px;border-radius:17px}
+.day{min-height:150px}
+.wk{grid-column:1/-1;margin:10px 0 2px;font-size:13px;font-weight:700;color:var(--mut)}
+.ib{width:38px;height:38px;padding:0;border:0;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;background:var(--acb);color:var(--ac)}
+.ib.del{background:transparent;color:var(--mut);font-size:22px}
+.fold{display:flex;align-items:center;gap:6px;width:100%;border:0;background:none;padding:12px 2px 6px;color:var(--mut);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.fold i{font-style:normal;font-size:18px;line-height:1;transition:.15s}.fold.cl i{transform:rotate(-90deg)}
+#eye{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.auth{display:flex;flex-direction:column;gap:10px;padding-top:7vh}.auth .logo{font-size:46px;text-align:center}.auth h2{margin:0;text-align:center}
+.seg{display:flex;gap:6px}.seg button{flex:1}.seg .on{background:var(--ac);color:var(--on);border-color:var(--ac)}
 </style></head>
-<body><main>
-<div class="tabs" id="tabs"><button data-t="cal"><span>📅</span>Calendario</button><button data-t="sch"><span>🎓</span>Escolares</button><button data-t="tas"><span>✅</span>Tareas</button><button data-t="rut"><span>🔁</span>Rutinas</button></div>
+<body class="noauth"><main>
+<div class="tabs" id="tabs"><button data-t="tas"><span>✅</span>Tareas</button><button data-t="sch"><span>🎓</span>Escolares</button><button data-t="cal"><span>📅</span>Calendario</button><button data-t="rut"><span>🔁</span>Rutinas</button><button data-t="usr"><span>👤</span>Usuario</button></div>
 <div id="app"></div>
 </main>
 <div id="sheet" hidden></div>
@@ -106,7 +120,7 @@ async function init(){
   db=await connect();
   ready=true;
   if(!db){render();return}
-  const sub=(n,f)=>db.collection(n).onSnapshot(s=>{f(s.docs.map(d=>({id:d.id,...d.data()})));got[n]=true;maybeSeed();render()},e=>console.error(e));
+  const sub=(n,f)=>db.collection(n).onSnapshot(s=>{f(s.docs.map(d=>({id:d.id,...d.data()})));got[n]=true;maybeSeed();render()},e=>{console.error(e);if(e.code==="permission-denied")$("#app").innerHTML='<p class="mut">Firebase rechaza el acceso: faltan publicar las reglas nuevas de Firestore.</p>'});
   sub("tasks",a=>tasks=a);sub("todos",a=>todos=a);sub("tags",a=>ctags=a);sub("meta",a=>metaSeed=a.some(x=>x.id==="seed"));
   sub("routines",a=>routines=a);sub("logs",a=>{logs={};a.forEach(l=>logs[l.id]=l.s||[])});
   render();
@@ -116,31 +130,43 @@ function render(){
   const a=$("#app");
   if(!ready){a.innerHTML='<p class="mut">Conectando…</p>';return}
   if(!db){a.innerHTML='<p class="mut">No se pudo conectar. Revisa tu conexión y que los datos de Firebase estén bien pegados en index.html.</p>';return}
-  a.innerHTML=tab==="cal"?cal()+dayPanel():tab==="sch"?schoolView():tab==="tas"?todosView():routinesView();
+  a.innerHTML=tab==="cal"?cal()+dayPanel():tab==="sch"?schoolView():tab==="tas"?todosView():tab==="rut"?routinesView():userView();
 }
-document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{if(!ready||!db)return;tab=b.dataset.t;render()});
-function mv(n){view.setMonth(view.getMonth()+n);render()}
+const ORD=["tas","sch","cal","rut","usr"];
+const PEN='<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+const EYE='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+let hid={S:false,T:false};
+document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>go(b.dataset.t));
+function go(t){if(!ready||!db||t===tab)return;tab=t;render();window.scrollTo(0,0)}
+let sx=0,sy=0,sok=false;
+document.addEventListener("touchstart",e=>{const t=e.touches[0];sx=t.clientX;sy=t.clientY;sok=e.touches.length===1&&$("#sheet").hidden&&!e.target.closest("input,select,textarea")},{passive:true});
+document.addEventListener("touchend",e=>{
+  if(!sok)return;sok=false;const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;
+  if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.6)return;
+  const i=ORD.indexOf(tab)+(dx<0?1:-1);if(i>=0&&i<ORD.length)go(ORD[i]);
+},{passive:true});
 function pick(d){sel=d;render()}
-function goToday(){sel=today();view=new Date();view.setDate(1);render()}
-
 function cal(){
-  const y=view.getFullYear(),m=view.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,dim=new Date(y,m+1,0).getDate();
-  let h='<div class="nav"><button onclick="mv(-1)">‹</button><b>'+view.toLocaleDateString("es-ES",{month:"long",year:"numeric"})+'</b><button onclick="goToday()">Hoy</button><button onclick="mv(1)">›</button></div><div class="grid">';
-  h+="LMXJVSD".split("").map(x=>'<i class="wd">'+x+"</i>").join("");
-  for(let i=0;i<off;i++)h+="<i></i>";
-  for(let d=1;d<=dim;d++){
-    const ds=iso(new Date(y,m,d)),wd=new Date(y,m,d).getDay();
-    const ev=tasks.filter(t=>t.date===ds),dots=ev.slice(0,4).map(t=>'<span class="ev'+(t.done?" done":"")+'" style="background:'+tcol(tagId(t))+'">'+esc(t.title)+"</span>").join("")+(ev.length>4?'<span class="more">+'+(ev.length-4)+" más</span>":"");
-    h+='<button class="day'+(ds===sel?" sel":"")+(ds===today()?" tod":"")+(wd===0||wd===6?" we":"")+'" onclick="pick(\''+ds+'\')"><b>'+d+"</b>"+dots+"</button>";
+  const s=new Date();s.setDate(s.getDate()-((s.getDay()+6)%7));
+  let h='<div class="grid">'+"LMXJVSD".split("").map(x=>'<i class="wd">'+x+"</i>").join("");
+  for(let w=0;w<2;w++){
+    const a=new Date(s);a.setDate(s.getDate()+w*7);const b=new Date(a);b.setDate(a.getDate()+6),o={day:"numeric",month:"short"};
+    h+='<div class="wk">'+(w?"Semana que viene":"Esta semana")+" · "+a.toLocaleDateString("es-ES",o)+" – "+b.toLocaleDateString("es-ES",o)+"</div>";
+    for(let i=0;i<7;i++){
+      const d=new Date(a);d.setDate(a.getDate()+i);const ds=iso(d),wd=d.getDay(),ev=tasks.filter(t=>t.date===ds);
+      const dots=ev.slice(0,4).map(t=>'<span class="ev'+(t.done?" done":"")+'" style="background:'+tcol(tagId(t))+'">'+esc(t.title)+"</span>").join("")+(ev.length>4?'<span class="more">+'+(ev.length-4)+" más</span>":"");
+      h+='<button class="day'+(ds===sel?" sel":"")+(ds===today()?" tod":"")+(wd===0||wd===6?" we":"")+'" onclick="pick(\''+ds+'\')"><b>'+d.getDate()+"</b>"+dots+"</button>";
+    }
   }
   return h+"</div>";
 }
 function taskRow(t,showDate,showImp,ro){
   const id=tagId(t);
-  return '<div class="row"><input type="checkbox" '+(t.done?"checked":"")+' onchange="ttog(\''+t.id+'\')"><span class="tag" style="background:'+tcol(id)+'">'+esc(tlabel(id)||"Sin etiqueta")+'</span><span class="t '+(t.done?"done":"")+'">'+esc(t.title)+(showDate?' <small class="mut">· '+fmt(t.date,{day:"numeric",month:"short"})+"</small>":"")+"</span>"+(showImp&&t.imp?'<b class="imp">'+"!".repeat(t.imp)+"</b>":"")+(ro?"":'<button class="x" onclick="openTask(null,\''+t.id+'\')">✎</button><button class="x" onclick="tdel(\''+t.id+'\')">×</button>')+"</div>";
+  return '<div class="row"><input type="checkbox" '+(t.done?"checked":"")+' onchange="ttog(\''+t.id+'\')"><span class="tag" style="background:'+tcol(id)+'">'+esc(tlabel(id)||"Sin etiqueta")+'</span><span class="t '+(t.done?"done":"")+'">'+esc(t.title)+(showDate?' <small class="mut">· '+fmt(t.date,{day:"numeric",month:"short"})+"</small>":"")+"</span>"+(showImp&&t.imp?'<b class="imp">'+"!".repeat(t.imp)+"</b>":"")+(ro?"":'<button class="ib" aria-label="Editar" onclick="openTask(null,\''+t.id+'\')">'+PEN+'</button><button class="ib del" aria-label="Borrar" onclick="tdel(\''+t.id+'\')">×</button>')+"</div>";
 }
 function dayPanel(){
-  const ts=tasks.filter(t=>t.date===sel),rs=routines.filter(r=>due(r,sel));
+  const ts=tasks.filter(t=>t.date===sel),dn=r=>{const s=logs[r.id+"_"+sel]||[];return times(r).every((_,i)=>s[i])};
+  const rs=routines.filter(r=>due(r,sel)).sort((a,b)=>dn(a)-dn(b)||(a.created||"").localeCompare(b.created||"")||a.title.localeCompare(b.title));
   let h="<h3>"+fmt(sel,{weekday:"long",day:"numeric",month:"long"})+"</h3>";
   h+=ts.length?ts.map(t=>taskRow(t,false,true,true)).join(""):'<p class="mut">Sin escolares este día.</p>';
   h+='<div class="dash"><div class="lbl">Rutinas de este día</div>';
@@ -151,11 +177,12 @@ function dayPanel(){
   }).join(""):'<p class="mut" style="margin:0">No hay rutinas para este día.</p>';
   return h+"</div>";
 }
+function foldBar(k,n){return '<button class="fold'+(hid[k]?" cl":"")+'" onclick="hid.'+k+'=!hid.'+k+';render()">Hechas ('+n+') <i>ˇ</i></button>'}
 function schoolView(){
   const p=tasks.filter(t=>!t.done).sort((a,b)=>a.date.localeCompare(b.date)),d=tasks.filter(t=>t.done).sort((a,b)=>b.date.localeCompare(a.date));
   let h='<div class="rw"><button class="add" style="margin:0;flex:1" onclick="openTask()">+ Nuevo escolar</button><button style="flex:none" onclick="openTags()">Etiquetas</button></div><h4>Pendientes</h4>';
   h+=p.length?p.map(t=>(t.date<today()?'<div style="border-left:3px solid #d6453d;border-radius:10px">':"<div>")+taskRow(t,true,false)+"</div>").join(""):'<p class="mut">Nada pendiente.</p>';
-  if(d.length)h+="<h4>Hechas</h4>"+d.map(t=>taskRow(t,true,false)).join("");
+  if(d.length)h+=foldBar("S",d.length)+(hid.S?"":d.map(t=>taskRow(t,true,false)).join(""));
   return h;
 }
 const PC=["","#22a559","#3b82f6","#eab308","#f97316","#dc2626"];
@@ -167,23 +194,28 @@ function sortTodos(a){
 }
 function todoRow(t){
   const od=t.due&&!t.done&&t.due<today();
-  return '<div class="row"><input type="checkbox" '+(t.done?"checked":"")+' onchange="todog(\''+t.id+'\')">'+star(t.pri||3,28)+'<span class="t '+(t.done?"done":"")+'">'+esc(t.title)+(t.due?' <small style="color:'+(od?"#d6453d":"var(--mut)")+'">· vence '+fmt(t.due,{day:"numeric",month:"short"})+"</small>":"")+'</span><button class="x" onclick="todel(\''+t.id+'\')">×</button></div>';
+  return '<div class="row"><input type="checkbox" '+(t.done?"checked":"")+' onchange="todog(\''+t.id+'\')">'+star(t.pri||3,28)+'<span class="t '+(t.done?"done":"")+'">'+esc(t.title)+(t.due?' <small style="color:'+(od?"#d6453d":"var(--mut)")+'">· vence '+fmt(t.due,{day:"numeric",month:"short"})+"</small>":"")+'</span><button class="ib" aria-label="Editar" onclick="openTodo(\''+t.id+'\')">'+PEN+'</button><button class="ib del" aria-label="Borrar" onclick="todel(\''+t.id+'\')">×</button></div>';
 }
 function todosView(){
   const p=sortTodos(todos.filter(t=>!t.done)),d=todos.filter(t=>t.done);
   let h='<button class="add" style="margin:0 0 8px" onclick="openTodo()">+ Nueva tarea</button><label class="srt">Ordenar <select onchange="tsort=this.value;render()">'+[["pd","Prioridad: mayor a menor"],["pa","Prioridad: menor a mayor"],["nd","Fecha: más nuevas primero"],["na","Fecha: más antiguas primero"]].map(([v,n])=>'<option value="'+v+'"'+(tsort===v?" selected":"")+">"+n+"</option>").join("")+'</select></label><h4>Pendientes</h4>'+(p.length?p.map(todoRow).join(""):'<p class="mut">Nada pendiente.</p>');
-  if(d.length)h+="<h4>Hechas</h4>"+d.map(todoRow).join("");
+  if(d.length)h+=foldBar("T",d.length)+(hid.T?"":d.map(todoRow).join(""));
   return h;
 }
 function routinesView(){
   let h='<button class="add" style="margin:0 0 8px" onclick="openRoutine()">+ Nueva rutina</button>';
-  h+=routines.length?routines.map(r=>{
+  h+=routines.length?routines.slice().sort((a,b)=>(a.created||"").localeCompare(b.created||"")||a.title.localeCompare(b.title)).map(r=>{
     const e=r.every||1,tm=times(r);
-    return '<div class="row"><div class="rinfo"><b>'+esc(r.title)+"</b><small>"+(e===1?"Cada día":"Cada "+e+" días")+" · "+tm.length+(tm.length===1?" vez":" veces")+(tm.some(Boolean)?" ("+tm.filter(Boolean).map(esc).join(", ")+")":"")+'</small></div><button onclick="openRoutine(\''+r.id+'\')">Editar</button></div>';
+    return '<div class="row"><div class="rinfo"><b>'+esc(r.title)+"</b><small>"+(e===1?"Cada día":"Cada "+e+" días")+" · "+tm.length+(tm.length===1?" vez":" veces")+(tm.some(Boolean)?" ("+tm.filter(Boolean).map(esc).join(", ")+")":"")+'</small></div><button class="ib" aria-label="Editar" onclick="openRoutine(\''+r.id+'\')">'+PEN+"</button></div>";
   }).join(""):'<p class="mut">Aún no tienes rutinas.</p>';
   return h;
 }
-
+function userView(){
+  const u=firebase.auth().currentUser,n=u?(u.displayName||(u.email||"").split("@")[0]):"";
+  return '<h3 style="text-transform:none">Mi cuenta</h3><div class="row"><span class="mut">Usuario</span><span class="t"><b>'+esc(n)+'</b></span></div><div class="row"><span class="mut">Contraseña</span><span class="t" id="pw" style="letter-spacing:3px">•••••</span><button class="ib" id="eye" aria-label="Mantén pulsado para ver la contraseña" onpointerdown="peek(1)" onpointerup="peek(0)" onpointerleave="peek(0)" onpointercancel="peek(0)" oncontextmenu="return false">'+EYE+'</button></div><p class="mut">Mantén pulsado el ojo para ver la contraseña.</p><button class="add" style="margin-top:20px" onclick="if(this.dataset.s){logout()}else{this.dataset.s=1;this.textContent=\'¿Seguro? Pulsa otra vez\'}">Cerrar sesión</button>';
+}
+function peek(v){const p=$("#pw");if(!p)return;let pin="";try{pin=localStorage.getItem("agenda_pin")||""}catch(e){}p.textContent=v?(pin||"No guardada en este dispositivo"):"•••••"}
+function logout(){try{localStorage.removeItem("agenda_pin")}catch(e){}firebase.auth().signOut().then(()=>location.reload())}
 function ttog(id){const t=tasks.find(x=>x.id===id);t.done=!t.done;render();dbw(db.collection("tasks").doc(id).update({done:t.done}))}
 function tdel(id){tasks=tasks.filter(x=>x.id!==id);render();dbw(db.collection("tasks").doc(id).delete())}
 function todog(id){const t=todos.find(x=>x.id===id);t.done=!t.done;render();dbw(db.collection("todos").doc(id).update({done:t.done}))}
@@ -208,20 +240,21 @@ function saveTask(){
   const id=edId||uid(),old=tasks.find(x=>x.id===id),o={title,date,tag:$("#tg").value,imp:+$("#ti").value,done:old?!!old.done:false};
   tasks=tasks.filter(x=>x.id!==id);tasks.push({id,...o});shut();render();dbw(db.collection("tasks").doc(id).set(o));
 }
-function openTodo(){
-  sheet('<h3>Nueva tarea</h3><input id="tt" placeholder="Ej. Llamar a mamá" maxlength="120"><label>Vence el (opcional) <input id="td" type="date"></label><div>Prioridad</div><div class="rw" style="align-items:center;margin:0"><span id="pv">'+star(3,36)+'</span><input id="tp" class="rg" type="range" min="1" max="5" step="1" value="3" oninput="prv()"></div><div class="act"><button onclick="shut()">Cancelar</button><button class="pri" onclick="saveTodo()">Guardar</button></div>');
+function openTodo(id){
+  const t=id?todos.find(x=>x.id===id):null,p=t?t.pri||3:3;edId=id||null;
+  sheet("<h3>"+(t?"Editar tarea":"Nueva tarea")+'</h3><input id="tt" placeholder="Ej. Llamar a mamá" maxlength="120" value="'+esc(t?t.title:"")+'"><label>Vence el (opcional) <input id="td" type="date" value="'+(t&&t.due?t.due:"")+'"></label><div>Prioridad</div><div class="rw" style="align-items:center;margin:0"><span id="pv">'+star(p,36)+'</span><input id="tp" class="rg" type="range" min="1" max="5" step="1" value="'+p+'" oninput="prv()"></div><div class="act"><button onclick="shut()">Cancelar</button><button class="pri" onclick="saveTodo()">Guardar</button></div>');
   $("#tt").focus();
 }
 function saveTodo(){
   const title=$("#tt").value.trim();if(!title){$("#tt").focus();return}
-  const id=uid(),o={title,done:false,pri:+$("#tp").value,created:Date.now()};if($("#td").value)o.due=$("#td").value;
-  todos.push({id,...o});shut();render();dbw(db.collection("todos").doc(id).set(o));
+  const id=edId||uid(),old=todos.find(x=>x.id===id),o={title,done:old?!!old.done:false,pri:+$("#tp").value,created:old&&old.created?old.created:Date.now()};
+  if($("#td").value)o.due=$("#td").value;
+  todos=todos.filter(x=>x.id!==id);todos.push({id,...o});shut();render();dbw(db.collection("todos").doc(id).set(o));
 }
-
 function openTags(){tmode={m:"new"};sheet('<h3>Etiquetas</h3><div id="tl"></div><div id="tf"></div><div class="act"><button class="pri" onclick="shut()">Listo</button></div>');tlist()}
 function tlist(){
   const rows=[],walk=(p,d)=>ctags.filter(x=>(x.parent||"")===p).forEach(x=>{
-    rows.push('<div class="row" style="margin-left:'+d*18+'px"><span class="tag" style="background:'+tcol(x.id)+'">'+esc(x.name)+'</span>'+(ctags.some(y=>y.parent===x.id)?'<button class="x tw'+(topen[x.id]?" op":"")+'" onclick="ttoggle(\''+x.id+'\')">ˇ</button>':"")+'<span class="t"></span><button class="x" onclick="tedit(\''+x.id+'\')">✎</button><button class="x" onclick="tsub(\''+x.id+'\')">+</button><button class="x" onclick="tdelc(\''+x.id+'\',this)">×</button></div>');if(topen[x.id])walk(x.id,d+1);
+    rows.push('<div class="row" style="margin-left:'+d*18+'px"><span class="tag" style="background:'+tcol(x.id)+'">'+esc(x.name)+'</span>'+(ctags.some(y=>y.parent===x.id)?'<button class="x tw'+(topen[x.id]?" op":"")+'" onclick="ttoggle(\''+x.id+'\')">ˇ</button>':"")+'<span class="t"></span><button class="ib" onclick="tedit(\''+x.id+'\')">'+PEN+'</button><button class="x" onclick="tsub(\''+x.id+'\')">+</button><button class="x" onclick="tdelc(\''+x.id+'\',this)">×</button></div>');if(topen[x.id])walk(x.id,d+1);
   });
   walk("",0);
   $("#tl").innerHTML=rows.join("")||'<p class="mut">No hay etiquetas.</p>';
@@ -260,20 +293,43 @@ function saveR(){
   routines=routines.filter(x=>x.id!==id);routines.push({id,...o});shut();render();dbw(db.collection("routines").doc(id).set(o));
 }
 function delR(){routines=routines.filter(x=>x.id!==reid);shut();render();dbw(db.collection("routines").doc(reid).delete())}
+const EM=u=>u.toLowerCase()+"@agenda-user.app",PW=p=>p+"-agenda";
 async function connect(){
   try{
     firebase.initializeApp(FB);
     const auth=firebase.auth(),fs=firebase.firestore();
     try{await fs.enablePersistence({synchronizeTabs:true})}catch(e){}
-    const user=await new Promise(res=>{const u=auth.onAuthStateChanged(x=>{u();res(x)})});
-    if(!user)await login(auth);
-    return fs;
+    let user=await new Promise(res=>{const u=auth.onAuthStateChanged(x=>{u();res(x)})});
+    if(!user)user=await authScreen(auth);
+    document.body.classList.remove("noauth");
+    return {collection:n=>fs.collection("users").doc(user.uid).collection(n)};
   }catch(e){console.error(e);return null}
 }
-function login(auth){
+function authScreen(auth){
   return new Promise(res=>{
-    $("#app").innerHTML='<h3>Iniciar sesión</h3><input id="lm" type="email" placeholder="Correo" autocomplete="username" autocapitalize="none" autocorrect="off"><input id="lp" type="password" placeholder="Contraseña" autocomplete="current-password" style="margin-top:8px"><p id="le" class="mut"></p><button class="pri" id="lb">Entrar</button>';
-    $("#lb").onclick=async()=>{try{await auth.signInWithEmailAndPassword($("#lm").value.trim(),$("#lp").value);res()}catch(e){const c=e.code||"",m={"auth/invalid-credential":"Correo o contraseña incorrectos, o ese usuario no existe en Firebase.","auth/wrong-password":"Contraseña incorrecta.","auth/user-not-found":"Ese correo no existe en Firebase.","auth/invalid-email":"El correo no es válido.","auth/operation-not-allowed":"En Firebase no está activado el inicio de sesión con correo y contraseña.","auth/network-request-failed":"Sin conexión a internet.","auth/too-many-requests":"Demasiados intentos. Espera unos minutos.","auth/invalid-api-key":"La apiKey de Firebase no es correcta.","auth/api-key-not-valid":"La apiKey de Firebase no es correcta."};$("#le").textContent=(m[c]||"Error al entrar.")+" ("+(c||e.message)+")"}};
+    let mode="in";
+    const ERR={"auth/email-already-in-use":"Ese nombre de usuario ya está cogido.","auth/invalid-credential":"Usuario o contraseña incorrectos.","auth/wrong-password":"Usuario o contraseña incorrectos.","auth/user-not-found":"Usuario o contraseña incorrectos.","auth/operation-not-allowed":"Falta activar el acceso con correo y contraseña en Firebase.","auth/network-request-failed":"Sin conexión a internet.","auth/too-many-requests":"Demasiados intentos. Espera unos minutos."};
+    const submit=async()=>{
+      const u=$("#au").value.trim(),p=$("#ap").value,e=$("#ae");
+      if(!/^[A-Za-z0-9_-]{4,16}$/.test(u)){e.textContent="El nombre debe tener de 4 a 16 caracteres: letras (sin ñ ni acentos), números, _ o -.";return}
+      if(!/^\d{5}$/.test(p)){e.textContent="La contraseña son 5 números.";return}
+      if(mode==="up"&&p!==$("#ac").value){e.textContent="Las contraseñas no coinciden.";return}
+      $("#ab").disabled=true;e.textContent="";
+      try{
+        let c;
+        if(mode==="up"){c=await auth.createUserWithEmailAndPassword(EM(u),PW(p));await c.user.updateProfile({displayName:u})}
+        else c=await auth.signInWithEmailAndPassword(EM(u),PW(p));
+        try{localStorage.setItem("agenda_pin",p)}catch(x){}
+        res(c.user);
+      }catch(x){e.textContent=(ERR[x.code]||"Error al entrar.")+" ("+(x.code||x.message)+")";$("#ab").disabled=false}
+    };
+    const draw=()=>{
+      const pw='type="password" inputmode="numeric" pattern="[0-9]*" maxlength="5"';
+      $("#app").innerHTML='<div class="auth"><div class="logo">📅</div><h2>Mi agenda</h2><div class="seg"><button id="m1" class="'+(mode==="in"?"on":"")+'">Iniciar sesión</button><button id="m2" class="'+(mode==="up"?"on":"")+'">Crear cuenta</button></div><input id="au" placeholder="Nombre de usuario" maxlength="16" autocapitalize="none" autocorrect="off" autocomplete="username"><input id="ap" '+pw+' placeholder="Contraseña (5 números)" autocomplete="'+(mode==="in"?"current-password":"new-password")+'">'+(mode==="up"?'<input id="ac" '+pw+' placeholder="Repite la contraseña" autocomplete="new-password">':"")+'<p id="ae" class="mut"></p><button class="pri" id="ab">'+(mode==="in"?"Entrar":"Crear cuenta")+"</button>"+(mode==="up"?'<p class="mut">Nombre: 4 a 16 caracteres (letras sin ñ ni acentos, números, _ o -). Contraseña: 5 números.</p>':"")+"</div>";
+      $("#m1").onclick=()=>{mode="in";draw()};$("#m2").onclick=()=>{mode="up";draw()};$("#ab").onclick=submit;
+      document.querySelectorAll("#ap,#ac").forEach(i=>i.oninput=()=>{i.value=i.value.replace(/\D/g,"")});
+    };
+    draw();
   });
 }
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js");
